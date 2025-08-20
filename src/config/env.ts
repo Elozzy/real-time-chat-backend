@@ -5,4 +5,6 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET ?? 'tarnished',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
   clientOrigin: process.env.CLIENT_ORIGIN ?? '*',
+  aliceToken: process.env.ALICE_TOKEN ?? '',
+  bobToken: process.env.BOB_TOKEN ?? '',
 };

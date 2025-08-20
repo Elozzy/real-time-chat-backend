@@ -1,53 +1,59 @@
 import { Server, Socket } from 'socket.io';
 import { SocketService } from './socket.service';
 
+
 export class SocketController {
-  static async handleConnection(io: Server, socket: Socket, user: { id: string; name: string }) {
-    await SocketService.userConnected(user.id, socket.id);
-    io.emit('user_status', { userId: user.id, status: 'online' });
-  }
+  private static onlineUsers: Map<string, any> = new Map();
 
-  static async handleDisconnect(io: Server, socket: Socket, user: { id: string }) {
-    const offline = await SocketService.userDisconnected(user.id, socket.id);
-    if (offline) {
-      io.emit('user_status', { userId: user.id, status: 'offline' });
-    }
-  }
+  // when a user connects
+  static handleConnection(io: Server, socket: Socket, user: any) {
+    // track online user
+    this.onlineUsers.set(user.id, { ...user, lastSeen: null });
 
-  static async joinRoom(socket: Socket, data: { roomId: string }, cb?: Function) {
-    try {
-      const room = await SocketService.joinRoom((socket as any).user.id, data.roomId);
-      socket.join(room.id);
-      cb?.({ ok: true });
-    } catch (err: any) {
-      cb?.({ error: err.message });
-    }
-  }
-
-  static async typing(socket: Socket, data: { roomId: string; isTyping: boolean }) {
-    socket.to(data.roomId).emit('typing', {
-      roomId: data.roomId,
-      userId: (socket as any).user.id,
-      isTyping: !!data.isTyping
+    // notify others
+    io.emit("user_status", {
+      user: { id: user.id, name: user.name },
+      status: "online",
+      lastSeen: null,
     });
   }
 
-  static async sendMessage(io: Server, socket: Socket, data: { roomId: string; content: string }, cb?: Function) {
-    try {
-      const user = (socket as any).user;
-      const message = await SocketService.sendMessage(user.id, data.roomId, data.content);
+  // when user disconnects
+  static handleDisconnect(io: Server, socket: Socket, user: any) {
+    const lastSeen = new Date().toISOString();
 
-      io.to(data.roomId).emit('receive_message', {
-        id: message.id,
-        roomId: message.roomId,
-        userId: message.userId,
-        content: message.content,
-        createdAt: message.createdAt
-      });
+    // update map
+    this.onlineUsers.delete(user.id);
 
-      cb?.({ ok: true, messageId: message.id });
-    } catch (err: any) {
-      cb?.({ error: err.message });
-    }
+    // notify others
+    io.emit("user_status", {
+      user: { id: user.id, name: user.name },
+      status: "offline",
+      lastSeen,
+    });
   }
+
+  // join room
+static joinRoom(socket: Socket, data: any, cb?: Function) {
+  socket.join(data.roomId);
+  if (cb) cb({ success: true });
 }
+
+  // typing
+  static typing(socket: Socket, data: any) {
+    socket.to(data.roomId).emit("typing", {
+      user: { id: data.userId, name: data.name },
+    });
+  }
+
+  // send message
+static sendMessage(io: Server, socket: Socket, data: any, cb?: Function) {
+  io.to(data.roomId).emit("receive_message", {
+    user: { id: data.userId, name: data.name },
+    message: data.message,
+    timestamp: new Date().toISOString(),
+  });
+  if (cb) cb({ success: true });
+}
+}
+
